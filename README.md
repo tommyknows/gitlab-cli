@@ -6,7 +6,7 @@ It is currently able to list users and groups recursively.
 
 ## Getting started
 
-Install with `go get github.com/tommyknows/gitlab-cli` or through [packa](github.com/tommyknows/packa).
+Install with `go get github.com/tommyknows/gitlab-cli` or through [packa](https://github.com/tommyknows/packa).
 
 Then, setup gitlab-cli:
 
