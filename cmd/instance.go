@@ -18,9 +18,10 @@ func newInstanceCommand(cfg *config.Config) *cobra.Command {
 
 	cmd.AddCommand(
 		&cobra.Command{
-			Use:   "add [SERVER] [TOKEN]",
-			Short: "login to a Gitlab instance. if none is given, uses gitlab.com",
-			Args:  cobra.RangeArgs(1, 2),
+			Use:     createSub.Usage("[SERVER] [TOKEN]"),
+			Aliases: createSub.abbr,
+			Short:   "login to a Gitlab instance. if none is given, uses gitlab.com",
+			Args:    cobra.RangeArgs(1, 2),
 			RunE: func(_ *cobra.Command, args []string) error {
 				var token, server string
 				if len(args) == 1 {
@@ -45,7 +46,7 @@ func newInstanceCommand(cfg *config.Config) *cobra.Command {
 				} else {
 					cfg.Contexts[server] = &config.Context{
 						InstanceName: server,
-						Group:    "",
+						Group:        "",
 					}
 				}
 
@@ -57,9 +58,11 @@ func newInstanceCommand(cfg *config.Config) *cobra.Command {
 			},
 		},
 		&cobra.Command{
-			Use:   "list",
-			Short: "list all instances in the config file",
-			Args:  cobra.NoArgs,
+			Use:     listSub.Usage(""),
+			Aliases: listSub.abbr,
+			Short:   "list all instances in the config file",
+			Args:    cobra.NoArgs,
+
 			RunE: func(_ *cobra.Command, args []string) error {
 				return printInstances(cfg)
 			},
@@ -93,14 +96,15 @@ func printInstances(cfg *config.Config) error {
 	fmt.Fprint(w, "\tname\tauthentication type\n")
 	fmt.Fprint(w, "\t----\t-------------------\n")
 
+	currentInstance := ""
 	ctx, err := cfg.GetCurrentContext()
-	if err != nil {
-		return err
+	if err == nil {
+		currentInstance = ctx.InstanceName
 	}
 
 	for name, instance := range cfg.Instances {
 		var current string
-		if name == ctx.InstanceName {
+		if name == currentInstance {
 			current = "*"
 		}
 		fmt.Fprintf(w, "%s\t%v\t%v\n", current, name, instance.Authentication.Type)

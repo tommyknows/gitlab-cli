@@ -5,7 +5,9 @@
 package gitlab
 
 import (
+	"context"
 	"errors"
+	"net/http"
 	"net/url"
 	"path"
 	"strings"
@@ -38,24 +40,46 @@ func extractNamespace(fullPath string) Namespace {
 }
 
 // GetProjects gets the project of the set namespace, returning the root of a Project-tree.
-func (c *Client) GetProjects(includeArchived bool) (root ProjectNode, err error) {
-	ns, _, err := c.c.Namespaces.GetNamespace(url.QueryEscape(c.namespace), nil)
-	if err != nil {
+func (c *Client) GetProjects(ctx context.Context, includeArchived bool) (root ProjectNode, err error) {
+	ns, resp, err := c.c.Namespaces.GetNamespace(url.QueryEscape(c.namespace), gl.WithContext(ctx))
+	if err == nil {
+		switch ns.Kind {
+		case "group":
+			return c.getGroup(ctx, c.namespace, includeArchived)
+		case "user":
+			return c.getUser(ctx, c.namespace, includeArchived)
+		default:
+			return nil, errors.New("unknown kind: " + ns.Kind)
+		}
+	}
+
+	// it could be that the namespace really not exists.
+	// it could also be that it is a project. In this case,
+	// (and we don't really know), we try getting the project.
+	if resp.StatusCode != http.StatusNotFound {
 		return nil, err
 	}
-	switch ns.Kind {
-	case "group":
-		return c.getGroup(c.namespace, includeArchived)
-	case "user":
-		return c.getUser(c.namespace, includeArchived)
-	default:
-		return nil, errors.New("unknown kind: " + ns.Kind)
+
+	tr := true
+	p, resp, err := c.c.Projects.GetProject(c.namespace, &gl.GetProjectOptions{
+		Statistics: &tr,
+	}, gl.WithContext(ctx))
+	if err == nil {
+		return newProject(p), nil
 	}
+
+	if resp.StatusCode != http.StatusNotFound {
+		return nil, err
+	}
+	// the error message is a lengthy string that includes the
+	// URL of the request. We don't need it, as we know exactly
+	// what it is, so we just create a custom error
+	return nil, errors.New("no such namespace or project")
 }
 
 // getUser and getGroup have an extreme amount of duplicated code. Yet, I cannot find a simple
 // solution to unify them without adding a ton of abstraction.
-func (c *Client) getUser(user string, includeArchived bool) (root ProjectNode, err error) {
+func (c *Client) getUser(ctx context.Context, user string, includeArchived bool) (root ProjectNode, err error) {
 	getProjects := func(archived bool) ([]*gl.Project, error) {
 		var projects []*gl.Project
 
@@ -67,7 +91,13 @@ func (c *Client) getUser(user string, includeArchived bool) (root ProjectNode, e
 			},
 		}
 		for {
-			p, resp, err := c.c.Projects.ListUserProjects(user, opts)
+			select {
+			case <-ctx.Done():
+				return nil, context.Canceled
+			default:
+			}
+
+			p, resp, err := c.c.Projects.ListUserProjects(user, opts, gl.WithContext(ctx))
 			if err != nil {
 				return nil, err
 			}
@@ -122,7 +152,7 @@ func (c *Client) getUser(user string, includeArchived bool) (root ProjectNode, e
 	return usr, nil
 }
 
-func (c *Client) getGroup(group string, includeArchived bool) (root ProjectNode, err error) {
+func (c *Client) getGroup(ctx context.Context, group string, includeArchived bool) (root ProjectNode, err error) {
 	getProjects := func(archived bool) ([]*gl.Project, error) {
 		var projects []*gl.Project
 		tr := true
@@ -135,7 +165,13 @@ func (c *Client) getGroup(group string, includeArchived bool) (root ProjectNode,
 			},
 		}
 		for {
-			p, resp, err := c.c.Groups.ListGroupProjects(group, opts)
+			select {
+			case <-ctx.Done():
+				return nil, context.Canceled
+			default:
+			}
+
+			p, resp, err := c.c.Groups.ListGroupProjects(group, opts, gl.WithContext(ctx))
 			if err != nil {
 				return nil, err
 			}

@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/transport"
+	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/pkg/errors"
 	"github.com/tommyknows/gitlab-cli/pkg/gitlab"
 	"github.com/tommyknows/gitlab-cli/pkg/log"
@@ -63,6 +65,20 @@ func (c *Context) GitlabClient() (*gitlab.Client, error) {
 	}
 
 	return gitlab.New(cl, space, isUser), nil
+}
+
+func (c *Context) Authentication() transport.AuthMethod {
+	if auth := c.Instance().Authentication.TokenAuthentication; auth != nil {
+		return &http.BasicAuth{
+			Username: "token",
+			Password: auth.Token,
+		}
+	}
+
+	return &http.BasicAuth{
+		Username: c.Instance().Authentication.Username,
+		Password: c.Instance().Authentication.Password,
+	}
 }
 
 // WithGroup returns a copy of the context, with the new group set

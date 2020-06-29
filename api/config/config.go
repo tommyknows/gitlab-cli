@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 
+	"github.com/ghodss/yaml"
 	"github.com/pkg/errors"
 )
 
@@ -41,7 +42,7 @@ func (i *Instances) UnmarshalJSON(data []byte) error {
 	type Alias Instances
 	a := Alias(*i)
 	if err := json.Unmarshal(data, &a); err != nil {
-		return err
+		return errors.Wrapf(err, "could not unmarshal instance")
 	}
 	for iURL := range *i {
 		u, err := url.Parse("https://" + iURL)
@@ -99,18 +100,18 @@ func Load(filename string, useConfigContext bool) (*Config, error) {
 		defaultConfig := Default()
 		defaultConfig.name = filename
 
-		def, _ := json.Marshal(defaultConfig)
+		def, _ := yaml.Marshal(defaultConfig)
 		return defaultConfig, ioutil.WriteFile(filename, def, 0600)
 	}
 
 	cont, err := ioutil.ReadFile(filename)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "could not read config file")
 	}
 
 	c := Default()
-	if err := json.Unmarshal(cont, c); err != nil {
-		return nil, err
+	if err := yaml.Unmarshal(cont, c); err != nil {
+		return nil, errors.Wrapf(err, "could not unmarshal config")
 	}
 
 	c.name = filename
@@ -120,7 +121,7 @@ func Load(filename string, useConfigContext bool) (*Config, error) {
 }
 
 func (c *Config) Write() error {
-	cont, err := json.Marshal(c)
+	cont, err := yaml.Marshal(c)
 	if err != nil {
 		return err
 	}

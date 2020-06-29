@@ -1,15 +1,44 @@
 package cmd
 
 import (
+	"context"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/tommyknows/gitlab-cli/api/config"
+	"github.com/tommyknows/gitlab-cli/pkg/log"
 )
 
 func Execute() error {
 	return gitlabCLI().Execute()
+}
+
+type command struct {
+	name string
+	abbr []string
+}
+
+var (
+	listSub = command{
+		name: "list",
+		abbr: []string{"ls"},
+	}
+	createSub = command{
+		name: "create",
+		abbr: []string{"cr", "new", "add"}, // TODO: is this a good idea?
+	}
+	deleteSub = command{
+		name: "delete",
+		abbr: []string{"del", "rm"},
+	}
+)
+
+func (c *command) Usage(s string) string {
+	return c.name + " " + s
 }
 
 var (
@@ -27,8 +56,17 @@ func gitlabCLI() *cobra.Command {
 
 	configDefaultPath := ""
 	if home := homeDir(); home != "" {
-		configDefaultPath = filepath.Join(home, ".gitlab-cli.json")
+		configDefaultPath = filepath.Join(home, ".gitlab-cli.yml")
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		signalChan := make(chan os.Signal, 1)
+		signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+		<-signalChan
+		log.Debugf("canceling context ,stopping all operations")
+		cancel()
+	}()
 
 	cmd := &cobra.Command{
 		Version: version,
@@ -38,11 +76,12 @@ func gitlabCLI() *cobra.Command {
 		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
 			c, err := config.Load(cfgFile, useConfigContext)
 			if err != nil {
-				return err
+				return errors.Wrapf(err, "could not load config file")
 			}
 
 			*cfg = *c
-			return err
+
+			return nil
 		},
 		PersistentPostRunE: func(_ *cobra.Command, _ []string) error {
 			return cfg.Write()
@@ -55,7 +94,7 @@ func gitlabCLI() *cobra.Command {
 	cmd.AddCommand(
 		newContextCommand(cfg),
 		newInstanceCommand(cfg),
-		newProjectCommand(cfg),
+		newProjectCommand(ctx, cfg),
 	)
 
 	return cmd

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"path"
 	"strings"
@@ -12,7 +13,7 @@ import (
 	"github.com/tommyknows/gitlab-cli/pkg/log"
 )
 
-func newProjectCommand(cfg *config.Config) *cobra.Command {
+func newProjectCommand(ctx context.Context, cfg *config.Config) *cobra.Command {
 	c := &cobra.Command{
 		Short:   "work with projects",
 		Aliases: []string{"pr", "proj", "projects"},
@@ -21,6 +22,7 @@ func newProjectCommand(cfg *config.Config) *cobra.Command {
 
 	useCtx := &cobra.Command{
 		Use:          "use-context [project] [context-name]",
+		Aliases:      []string{"use-ctx"},
 		Short:        "use specified project / group as context ",
 		SilenceUsage: true,
 		Long: "use the specified project / group as context. If context name is not given, " +
@@ -61,13 +63,13 @@ func newProjectCommand(cfg *config.Config) *cobra.Command {
 	}
 
 	c.AddCommand(
-		newProjectListCommand(cfg),
-		newProjectCloneCommand(cfg),
+		newProjectListCommand(ctx, cfg),
+		newProjectCloneCommand(ctx, cfg),
 		useCtx)
 	return c
 }
 
-func newProjectCloneCommand(cfg *config.Config) *cobra.Command {
+func newProjectCloneCommand(ctx context.Context, cfg *config.Config) *cobra.Command {
 	var (
 		recursive bool
 		depth     int
@@ -85,12 +87,17 @@ func newProjectCloneCommand(cfg *config.Config) *cobra.Command {
 
 				cctx, err := cfg.GetCurrentContext()
 				if err != nil {
-					return err
+					return errors.Wrapf(err, "could not get current context")
 				}
 
 				var group string
 				if len(args) == 1 {
 					group = args[0]
+				}
+
+				var skipRoot bool
+				if strings.HasSuffix(group, "/") {
+					skipRoot = true
 				}
 
 				group = getAbsoluteGroupPath(cctx.Group, group)
@@ -102,12 +109,22 @@ func newProjectCloneCommand(cfg *config.Config) *cobra.Command {
 
 				log.Infof("fetching projects...")
 
-				rootProj, err := client.GetProjects(false)
+				rootProj, err := client.GetProjects(ctx, false)
 				if err != nil {
-					return errors.Wrapf(err, "could not get group")
+					return errors.Wrapf(err, "could not get namespace or project %s", group)
 				}
 
-				return gitlab.Walk(rootProj, gitlab.Clone(rootProj.FullPath()))
+				rootPath := rootProj.Namespace()
+				if skipRoot {
+					rootPath = rootProj.FullPath()
+				}
+
+				clone, err := gitlab.Clone(rootPath, skipRoot, cctx.Authentication())
+				if err != nil {
+					return errors.Wrapf(err, "could not setup clone environment")
+				}
+				// TODO: implement canceling the context by stopping the binary
+				return gitlab.WalkConcurrent(ctx, rootProj, clone)
 			},
 		}
 	)
@@ -117,7 +134,7 @@ func newProjectCloneCommand(cfg *config.Config) *cobra.Command {
 	return clone
 }
 
-func newProjectListCommand(cfg *config.Config) *cobra.Command {
+func newProjectListCommand(ctx context.Context, cfg *config.Config) *cobra.Command {
 	var (
 		recursive       bool
 		depth           int
@@ -125,12 +142,11 @@ func newProjectListCommand(cfg *config.Config) *cobra.Command {
 		showAll         bool
 
 		list = &cobra.Command{
-			Use:          "list [proj]",
+			Use:          listSub.Usage("[proj]"),
 			SilenceUsage: true,
-			// TODO
-			Short:   "list projects in the current group",
-			Aliases: []string{"ls"},
-			Args:    cobra.RangeArgs(0, 1),
+			Short:        "list projects in the current group", // TODO
+			Aliases:      listSub.abbr,
+			Args:         cobra.RangeArgs(0, 1),
 			RunE: func(_ *cobra.Command, args []string) error {
 				// TODO: move this to PersistentPreRun in Project command. Couldn't get it to work.
 				// the project command doesn't really make sense if a concrete git repo.
@@ -138,7 +154,7 @@ func newProjectListCommand(cfg *config.Config) *cobra.Command {
 
 				cctx, err := cfg.GetCurrentContext()
 				if err != nil {
-					return err
+					return errors.Wrapf(err, "could not get current context")
 				}
 
 				var group string
@@ -155,9 +171,9 @@ func newProjectListCommand(cfg *config.Config) *cobra.Command {
 
 				log.Infof("fetching projects...")
 
-				rootProj, err := client.GetProjects(showAll)
+				rootProj, err := client.GetProjects(ctx, showAll)
 				if err != nil {
-					return errors.Wrapf(err, "could not get group")
+					return errors.Wrapf(err, "could not get namespace or project %s", group)
 				}
 
 				fmt.Printf("%v", gitlab.PrintProject(rootProj, gitlab.PrintOptions{

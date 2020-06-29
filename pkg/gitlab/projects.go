@@ -1,6 +1,7 @@
 package gitlab
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/tommyknows/gitlab-cli/pkg/log"
 	"github.com/tommyknows/gitlab-cli/pkg/treewriter"
 	gl "github.com/xanzy/go-gitlab"
+	"golang.org/x/sync/errgroup"
 )
 
 // ProjectNode is a node in a tree.
@@ -42,6 +44,7 @@ type noder interface {
 }
 
 type Visitor func(p ProjectNode) error
+type ContextVisitor func(ctx context.Context, p ProjectNode) error
 
 // Walk a Project (tree) depth-first. Stops walking on error.
 func Walk(root ProjectNode, walkFunc Visitor) error {
@@ -60,6 +63,35 @@ func Walk(root ProjectNode, walkFunc Visitor) error {
 		}
 	}
 	return nil
+}
+
+// WalkConcurrent walks a Project (tree) depth-first, starting a goroutine
+// for every child's node AFTER the node has been visited.
+func WalkConcurrent(ctx context.Context, root ProjectNode, walkFunc ContextVisitor) error {
+	select {
+	case <-ctx.Done():
+		return nil
+	default:
+	}
+
+	if err := walkFunc(ctx, root); err != nil {
+		return err
+	}
+
+	node, ok := root.(noder)
+	if !ok {
+		return nil
+	}
+
+	g, ctx := errgroup.WithContext(ctx)
+	for _, n := range node.nodes() {
+		n := n // https://golang.org/doc/faq#closures_and_goroutines
+		g.Go(func() error {
+			return WalkConcurrent(ctx, n, walkFunc)
+		})
+	}
+
+	return g.Wait()
 }
 
 func sortNodes(s []ProjectNode) {

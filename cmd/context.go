@@ -53,11 +53,11 @@ func newContextCommand(cfg *config.Config) *cobra.Command {
 			},
 		},
 		&cobra.Command{
-			Use:     "switch [name]",
-			Short:   "switch to a context",
-			Aliases: []string{"sw"},
+			Use:          "switch [name]",
+			Short:        "switch to a context",
+			Aliases:      []string{"sw"},
 			SilenceUsage: true,
-			Args:    cobra.ExactArgs(1),
+			Args:         cobra.ExactArgs(1),
 			RunE: func(_ *cobra.Command, args []string) error {
 				if _, ok := cfg.Contexts[args[0]]; !ok {
 					return errors.Errorf("no such context: %q", args[0])
