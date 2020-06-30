@@ -49,13 +49,6 @@ func (c *Context) Instance() *InstanceConfig {
 
 // GitlabClient creates a Gitlab Client from the given context
 func (c *Context) GitlabClient() (*gitlab.Client, error) {
-	isUser := false
-	space := c.Group
-	if space == "" && c.User != "" {
-		isUser = true
-		space = c.User
-	}
-
 	cl, err := gogitlab.NewClient(
 		c.Instance().Authentication.Token,
 		gogitlab.WithBaseURL(c.Instance().apiURL()),
@@ -64,7 +57,7 @@ func (c *Context) GitlabClient() (*gitlab.Client, error) {
 		return nil, err
 	}
 
-	return gitlab.New(cl, space, isUser), nil
+	return gitlab.New(cl, c.Namespace), nil
 }
 
 func (c *Context) Authentication() transport.AuthMethod {
@@ -81,11 +74,10 @@ func (c *Context) Authentication() transport.AuthMethod {
 	}
 }
 
-// WithGroup returns a copy of the context, with the new group set
-func (c *Context) WithGroup(group string) *Context {
+// WitNamespace returns a copy of the context, with the new group set
+func (c *Context) WitNamespace(namespace string) *Context {
 	return &Context{
-		Group:          group,
-		User:           c.User,
+		Namespace:      namespace,
 		InstanceName:   c.InstanceName,
 		instanceConfig: c.instanceConfig,
 	}
@@ -120,7 +112,7 @@ func (c *Config) newGitRepoContext(repo *git.Repository) (*Context, error) {
 			log.Debugf("repo URL matches Instance URL %q, creating context with Group %v", repoURL.Host, repoURL.Path)
 			return &Context{
 				InstanceName:   instName,
-				Group:          repoURL.Path,
+				Namespace:      repoURL.Path,
 				instanceConfig: instCfg,
 			}, nil
 		}

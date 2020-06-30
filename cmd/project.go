@@ -15,7 +15,10 @@ import (
 
 func newProjectCommand(ctx context.Context, cfg *config.Config) *cobra.Command {
 	c := &cobra.Command{
-		Short:   "work with projects",
+		Short: "work with projects",
+		Long: `The project subcommand allows to work with projects. It DOES NOT make a 
+distinction between groups, user (both are considered to be "namespaces" in gitlab terms),
+or actual projects (git repository).`,
 		Aliases: []string{"pr", "proj", "projects"},
 		Use:     "project",
 	}
@@ -40,21 +43,16 @@ func newProjectCommand(ctx context.Context, cfg *config.Config) *cobra.Command {
 				return errors.Wrapf(err, "could not get active context")
 			}
 
-			group := currentCtx.Group
-			if currentCtx.Group == "" {
-				group = currentCtx.User
-			}
-
-			group = getAbsoluteGroupPath(group, proj)
+			namespace := getAbsoluteGroupPath(currentCtx.Namespace, proj)
 
 			if len(args) == 1 {
-				currentCtx.Group = group
+				currentCtx.Namespace = namespace
 				return nil
 			}
 
 			ctxName := args[1]
 			cfg.Contexts[ctxName] = &config.Context{
-				Group:        group,
+				Namespace:    namespace,
 				InstanceName: currentCtx.InstanceName,
 			}
 
@@ -90,19 +88,19 @@ func newProjectCloneCommand(ctx context.Context, cfg *config.Config) *cobra.Comm
 					return errors.Wrapf(err, "could not get current context")
 				}
 
-				var group string
+				var namespace string
 				if len(args) == 1 {
-					group = args[0]
+					namespace = args[0]
 				}
 
 				var skipRoot bool
-				if strings.HasSuffix(group, "/") {
+				if strings.HasSuffix(namespace, "/") {
 					skipRoot = true
 				}
 
-				group = getAbsoluteGroupPath(cctx.Group, group)
+				namespace = getAbsoluteGroupPath(cctx.Namespace, namespace)
 
-				client, err := cctx.WithGroup(group).GitlabClient()
+				client, err := cctx.WitNamespace(namespace).GitlabClient()
 				if err != nil {
 					return errors.Wrapf(err, "could not get gitlab client")
 				}
@@ -111,7 +109,7 @@ func newProjectCloneCommand(ctx context.Context, cfg *config.Config) *cobra.Comm
 
 				rootProj, err := client.GetProjects(ctx, false)
 				if err != nil {
-					return errors.Wrapf(err, "could not get namespace or project %s", group)
+					return errors.Wrapf(err, "could not get namespace or project %s", namespace)
 				}
 
 				rootPath := rootProj.Namespace()
@@ -136,7 +134,6 @@ func newProjectCloneCommand(ctx context.Context, cfg *config.Config) *cobra.Comm
 
 func newProjectListCommand(ctx context.Context, cfg *config.Config) *cobra.Command {
 	var (
-		recursive       bool
 		depth           int
 		showDescription bool
 		showAll         bool
@@ -157,14 +154,14 @@ func newProjectListCommand(ctx context.Context, cfg *config.Config) *cobra.Comma
 					return errors.Wrapf(err, "could not get current context")
 				}
 
-				var group string
+				var namespace string
 				if len(args) == 1 {
-					group = args[0]
+					namespace = args[0]
 				}
 
-				group = getAbsoluteGroupPath(cctx.Group, group)
+				namespace = getAbsoluteGroupPath(cctx.Namespace, namespace)
 
-				client, err := cctx.WithGroup(group).GitlabClient()
+				client, err := cctx.WitNamespace(namespace).GitlabClient()
 				if err != nil {
 					return errors.Wrapf(err, "could not get gitlab client")
 				}
@@ -173,7 +170,7 @@ func newProjectListCommand(ctx context.Context, cfg *config.Config) *cobra.Comma
 
 				rootProj, err := client.GetProjects(ctx, showAll)
 				if err != nil {
-					return errors.Wrapf(err, "could not get namespace or project %s", group)
+					return errors.Wrapf(err, "could not get namespace or project %s", namespace)
 				}
 
 				fmt.Printf("%v", gitlab.PrintProject(rootProj, gitlab.PrintOptions{
@@ -186,8 +183,7 @@ func newProjectListCommand(ctx context.Context, cfg *config.Config) *cobra.Comma
 		}
 	)
 
-	list.Flags().BoolVarP(&recursive, "recursive", "r", false, "list recursively")
-	list.Flags().IntVarP(&depth, "depth", "d", 0, "depth to list recursively. 0 means infinite")
+	list.Flags().IntVarP(&depth, "depth", "d", 1, "depth to list recursively. 0 means infinite")
 	list.Flags().BoolVar(&showDescription, "desc", false, "show description of projects too")
 	list.Flags().BoolVarP(&showAll, "all", "a", false, "show all projects, including archived ones")
 

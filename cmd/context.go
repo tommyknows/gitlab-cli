@@ -12,6 +12,21 @@ import (
 
 func newContextCommand(cfg *config.Config) *cobra.Command {
 	c := &cobra.Command{
+		Long: `the context subcommands allows to list, add, change or delete contexts that are 
+specified in the config file.
+
+A context specifies the mapping between a namespace and an instance, allowing to 
+easily "switch" projects upstream. 
+
+If the context is a remote command or the "--use-config-context" flag is set, the 
+current context will be used to specify the "root" for all operations. 
+
+Some commands may allow to pass a project as an argument, which may have a 
+different behaviour depending on how the project is specified. The project 
+definitions work similarly to Unix / Linux directories: 
+	If the project starts with a "/", the path will be deemed to be absolute, while
+if it does not start with a "/", it will be considered to be relative to the 
+current namespace.`,
 		Short:   "work with the contexts",
 		Aliases: []string{"contexts", "ctx", "ctxs"},
 		Use:     "context",
@@ -28,21 +43,21 @@ func newContextCommand(cfg *config.Config) *cobra.Command {
 			},
 		},
 		&cobra.Command{
-			Use:     "create [name] [instance] [group]",
+			Use:     "create [name] [instance] [namespace/project]",
 			Short:   "create a context that is tied to an instance, with an optional group",
 			Args:    cobra.RangeArgs(2, 3),
 			Aliases: []string{"cr"},
 			RunE: func(_ *cobra.Command, args []string) error {
-				var name, instance, group string
+				var name, instance, ns string
 				name = args[0]
 				instance = args[1]
 
 				if len(args) == 3 {
-					group = args[2]
+					ns = args[2]
 				}
 
 				cfg.Contexts[name] = &config.Context{
-					Group:        group,
+					Namespace:    ns,
 					InstanceName: instance,
 				}
 
@@ -98,24 +113,16 @@ func newContextCommand(cfg *config.Config) *cobra.Command {
 func printContexts(c *config.Config) error {
 	w := tabwriter.NewWriter(os.Stdout, 1, 8, 2, ' ', 0)
 
-	fmt.Fprint(w, "\tname\tinstance\tgroup\tuser\n")
-	fmt.Fprint(w, "\t----\t--------\t-----\t----\n")
+	fmt.Fprint(w, "\tname\tinstance\tnamespace\n")
+	fmt.Fprint(w, "\t----\t--------\t---------\n")
 
 	for name, ctx := range c.Contexts {
 		var current string
 		if name == c.CurrentContext {
 			current = "*"
 		}
-		user := ctx.User
-		group := ctx.Group
-		if user == "" {
-			user = "-"
-		}
-		if group == "" {
-			group = "-"
-		}
 
-		fmt.Fprintf(w, "%s\t%v\t%v\t%v\t%v\n", current, name, ctx.InstanceName, group, user)
+		fmt.Fprintf(w, "%s\t%v\t%v\t%v\n", current, name, ctx.InstanceName, ctx.Namespace)
 	}
 
 	return w.Flush()

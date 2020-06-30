@@ -16,8 +16,8 @@ import (
 	gl "github.com/xanzy/go-gitlab"
 )
 
-func New(c *gl.Client, userOrGroup string, isUser bool) *Client {
-	return &Client{c, userOrGroup}
+func New(c *gl.Client, namespace string) *Client {
+	return &Client{c, namespace}
 }
 
 type Client struct {
@@ -53,10 +53,15 @@ func (c *Client) GetProjects(ctx context.Context, includeArchived bool) (root Pr
 		}
 	}
 
+	// some connection error - no internet connection for example.
+	if resp == nil && err != nil {
+		return nil, err
+	}
+
 	// it could be that the namespace really not exists.
 	// it could also be that it is a project. In this case,
 	// (and we don't really know), we try getting the project.
-	if resp.StatusCode != http.StatusNotFound {
+	if resp != nil && resp.StatusCode != http.StatusNotFound {
 		return nil, err
 	}
 

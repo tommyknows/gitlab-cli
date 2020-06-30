@@ -72,7 +72,35 @@ func gitlabCLI() *cobra.Command {
 		Version: version,
 		Use:     "gitlab-cli",
 		Short:   "gitlab-cli allows interacting with Gitlab",
-		Long:    `TODO`, // TODO
+		Long: `gitlab-cli allows interacting with Gitlab instances. These may 
+be of any URL, which are defined through the "instance" subcommand and mapped
+to specific projects through "contexts" / the context subcommand. 
+
+In general, there's two group of commands:
+- Remote 
+- Local (none implemented yet)
+
+Remote commands, like the "project" subcommand, do not care about your current
+working directory. Local ones inspect the current working directory and, if it
+should be a git repository, will try to extract the remote URL and group in 
+order to work with it.
+
+Remote (sub)commands are:
+- project
+- context
+- instance {create,clean}
+
+Local (sub)commands are not yet implemented, but examples are:
+- merge-request
+- issues
+
+The distinction between remote and local can be toggled through the use of the
+flag '--use-config-context' / '-u'. This will disable the parsing of the local
+git repository and always use the current context that is specified in the 
+config file
+
+This tool is currently in alpha stage.
+`,
 		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
 			c, err := config.Load(cfgFile, useConfigContext)
 			if err != nil {

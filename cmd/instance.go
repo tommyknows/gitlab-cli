@@ -11,6 +11,11 @@ import (
 
 func newInstanceCommand(cfg *config.Config) *cobra.Command {
 	cmd := &cobra.Command{
+		Long: `instances specify the URL and login for Gitlab instances. Currently, for login 
+only API Tokens ("access tokens") are available. 
+
+Depending on what you are trying to do with that CLI, you may assign the token 
+more or less permissions.`,
 		Short:   "manage instance connections of the config file",
 		Aliases: []string{"inst"},
 		Use:     "instance",
@@ -46,7 +51,7 @@ func newInstanceCommand(cfg *config.Config) *cobra.Command {
 				} else {
 					cfg.Contexts[server] = &config.Context{
 						InstanceName: server,
-						Group:        "",
+						Namespace:    "",
 					}
 				}
 

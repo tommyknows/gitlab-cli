@@ -49,7 +49,7 @@ type ContextVisitor func(ctx context.Context, p ProjectNode) error
 // Walk a Project (tree) depth-first. Stops walking on error.
 func Walk(root ProjectNode, walkFunc Visitor) error {
 	if err := walkFunc(root); err != nil {
-		return err
+		return errors.Wrapf(err, "could not walk node")
 	}
 
 	node, ok := root.(noder)
@@ -59,7 +59,7 @@ func Walk(root ProjectNode, walkFunc Visitor) error {
 
 	for _, n := range node.nodes() {
 		if err := Walk(n, walkFunc); err != nil {
-			return err
+			return errors.Wrapf(err, "could not walk project")
 		}
 	}
 	return nil
@@ -75,7 +75,7 @@ func WalkConcurrent(ctx context.Context, root ProjectNode, walkFunc ContextVisit
 	}
 
 	if err := walkFunc(ctx, root); err != nil {
-		return err
+		return errors.Wrapf(err, "could not walk node")
 	}
 
 	node, ok := root.(noder)

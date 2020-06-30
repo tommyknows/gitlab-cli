@@ -68,9 +68,8 @@ const (
 )
 
 type Context struct {
-	// the "default" group to use, a.k.a. the root of every operation.
-	Group        string `json:"group,omitempty"`
-	User         string `json:"user,omitempty"`
+	// the "default" namespace to use, a.k.a. the root of every operation.
+	Namespace    string `json:"namespace,omitempty"`
 	InstanceName string `json:"instance"`
 
 	// this is not populated at unmarshal because we cannot rely on
@@ -123,7 +122,7 @@ func Load(filename string, useConfigContext bool) (*Config, error) {
 func (c *Config) Write() error {
 	cont, err := yaml.Marshal(c)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "could not marshal config")
 	}
 
 	return ioutil.WriteFile(c.name, cont, 0600)
